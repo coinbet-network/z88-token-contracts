@@ -1,0 +1,26 @@
+{
+  "name": "coinbet-contracts",
+  "version": "1.0.0",
+  "description": "",
+  "main": "truffle-config.js",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "ethereumjs-wallet": "^0.6.0",
+    "truffle-hdwallet-provider": "0.0.3",
+    "truffle-hdwallet-provider-privkey": "^0.2.0",
+    "web3": "^0.19.0",
+    "zeppelin-solidity": "^1.8.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "compile": "truffle compile --all",
+    "dev": "truffle migrate --reset --network development",
+    "testnet": "truffle migrate --reset --network ropsten",
+    "gensource": "truffle-flattener ./contracts/CoinBet.sol"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

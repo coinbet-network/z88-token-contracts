@@ -259,25 +259,151 @@ contract Pausable is Ownable {
 }
 
 
+contract LockedWalletForTeam is Ownable {
+    
+  uint256 public createdAt;
+  ERC20 public tokenContract;
+  uint256 public totalToken;
+
+  uint256 public firstUnlockDate;
+  uint256 public secondUnlockDate;
+  uint256 public thirdUnlockDate;
+
+  uint public withdrawStage;
+
+  event WithdrewTokens(address tokenContract, address to, uint256 amount);
+
+  function LockedWalletForTeam(
+    ERC20 _tokenContract,
+    address _owner,
+    uint256 _totalToken
+  ) public {
+    tokenContract = _tokenContract;
+    owner = _owner;    
+    totalToken = _totalToken;
+    createdAt = now;
+    withdrawStage = 0;
+    
+    firstUnlockDate = now + (11 * 30 * 1 days); // Allow withdraw 20% after 11 month    
+    secondUnlockDate = now + (23 * 30 * 1 days); // Allow withdraw 30% after 23 month
+    thirdUnlockDate = now + (35 * 30 * 1 days); // Allow withdraw all after 35 month
+  }
+  
+  function() payable public { 
+    revert();
+  }
+
+  // callable by owner only, after specified time
+  function withdrawTokens() onlyOwner public {
+    require(now > firstUnlockDate);
+
+    uint256 amount = 0;
+    if(now > thirdUnlockDate) {
+      // withdrew all remain token in second stage
+      amount = tokenContract.balanceOf(this);      
+    } else if(now > secondUnlockDate && withdrawStage == 1) {
+      // withdrew 30% in second stage
+      amount = totalToken * 30 / 100;
+    } else if(now > firstUnlockDate && withdrawStage == 0){
+      // withdrew 20% in first stage
+      amount = totalToken * 20 / 100;
+    }
+
+    if(amount > 0) {
+      tokenContract.transfer(msg.sender, amount);
+      emit WithdrewTokens(tokenContract, msg.sender, amount);
+      withdrawStage = withdrawStage + 1;
+      return;
+    }
+
+    revert();
+  }
+
+  function info() public view returns(address, uint256, uint256) {
+    uint256 tokenBalance = tokenContract.balanceOf(this);
+    return (owner, createdAt, tokenBalance);
+  }
+}
+
+
+contract LockedWalletForAdvisor is Ownable {
+    
+  uint256 public createdAt;
+  ERC20 public tokenContract;
+  uint256 public totalToken;
+
+  uint256 public firstUnlockDate;
+  uint256 public secondUnlockDate;  
+
+  uint public withdrawStage;
+
+  event WithdrewTokens(address tokenContract, address to, uint256 amount);
+
+  function LockedWalletForAdvisor(
+    ERC20 _tokenContract,
+    address _owner,
+    uint256 _totalToken
+  ) public {
+    tokenContract = _tokenContract;
+    owner = _owner;    
+    totalToken = _totalToken;
+    createdAt = now;
+    withdrawStage = 0;
+    
+    firstUnlockDate = now + (5 * 30 * 1 days); // Allow withdraw 50% after 5 month    
+    secondUnlockDate = now + (11 * 30 * 1 days); // Allow withdraw all after 11 month    
+  }
+  
+  function() payable public { 
+    revert();
+  }
+
+  // callable by owner only, after specified time
+  function withdrawTokens() onlyOwner public {
+    require(now > firstUnlockDate);
+
+    uint256 amount = 0;
+    if(now > secondUnlockDate) {
+      // withdrew all remain token in second stage
+      amount = tokenContract.balanceOf(this);
+    } else if(now > firstUnlockDate && withdrawStage == 0){
+      // withdrew 50% in first stage
+      amount = totalToken * 50 / 100;
+    }
+
+    if(amount > 0) {
+      tokenContract.transfer(msg.sender, amount);
+      emit WithdrewTokens(tokenContract, msg.sender, amount);
+      withdrawStage = withdrawStage + 1;
+      return;
+    }
+
+    revert();
+  }
+
+  function info() public view returns(address, uint256, uint256) {
+    uint256 tokenBalance = tokenContract.balanceOf(this);
+    return (owner, createdAt, tokenBalance);
+  }
+}
+
+
 // ================= Coinbet Token =======================
 contract CoinBet is StandardToken, Pausable {
   
   string public constant name = "Coinbet";
   string public constant symbol = "Z88";  
   uint256 public constant decimals = 18;
-  uint256 public constant totalSupply = 100000000 * 10 ** 18; // 100M token will be supplied
+  uint256 public constant totalSupply = 100000000 * (10 ** 18); // 100M token will be supplied
 
-  uint256 public constant founderAndTeamAllocation = 15000000 * 10 ** 18; // 15M tokens allocated for founders and team
-  uint256 public constant advisorAllocation = 3000000 * 10 ** 18; // 3M tokens allocated for advisors
-  uint256 public constant airdropAllocation = 2000000 * 10 ** 18; // 2M tokens allocated for airdrops
-  uint256 public constant privateSaleAllocation = 40000000 * 10 ** 18; // 40M tokens allocated for private sale
-  uint256 public constant tokenPerBracket = 10000000 * 10 ** 18; // 4 brackets with 10M tokens per one - total 40M tokens for public sale    
+  uint256 public constant founderAndTeamAllocation = 15000000 * (10 ** 18); // 15M tokens allocated for founders and team
+  uint256 public constant advisorAllocation = 3000000 * (10 ** 18); // 3M tokens allocated for advisors
+  uint256 public constant airdropAllocation = 2000000 * (10 ** 18); // 2M tokens allocated for airdrops
+  uint256 public constant privateSaleAllocation = 40000000 * (10 ** 18); // 40M tokens allocated for private sale
+  uint256 public constant tokenPerBracket = 10000000 * (10 ** 18); // 4 brackets with 10M tokens per one - total 40M tokens for public sale    
   uint256 public constant minAcceptedAmount = 0.1 * (1 ether); // 0.1 ether for mininum ether acception in public sale  
   
   address public walletAddress;
-
-  address public founderAndTeamAddress;
-  address public advisorAddress;
   address public airdropAddress;
   address public privateSaleAddress;
 
@@ -288,10 +414,18 @@ contract CoinBet is StandardToken, Pausable {
     uint256 total;
     uint256 remainToken;
     uint256 tokenPerEther;    
-  }    
+  }
+
+  struct TokenLockInfo {
+    address owner;
+    uint256 tokenAmount;    
+  }
     
   Bracket[] public brackets;  
   uint public currentBracketIndex = 0;
+
+  mapping(address => address) public teamWallets;
+  mapping(address => address) public advisorWallets;
 
   event PrivateSale(address to, uint256 tokenAmount); // Transfer token to investors
   event PublicSale(address to, uint256 amount, uint256 tokenAmount); // Investors purchase token in public sale
@@ -299,6 +433,7 @@ contract CoinBet is StandardToken, Pausable {
   event StartPublicSale(uint256 tokenPerEther); // start public sale with price
   event EndPublicSale(); // end public sale
   event ChangeBracketIndex(uint bracketIndex); // change to next bracket for sale  
+  event EnableTransfer();
 
   modifier onlyPrivateSaleOrOwner() {
     require(msg.sender == privateSaleAddress || msg.sender == owner);
@@ -316,23 +451,17 @@ contract CoinBet is StandardToken, Pausable {
   }
 
   function CoinBet(    
-    address _walletAddress, 
-    address _founderAndTeamAddress, 
-    address _advisorAddress, 
+    address _walletAddress,    
     address _airdropAddress, 
     address _privateSaleAddress
   ) 
     public 
   {    
     require(_walletAddress != address(0));
-    require(_founderAndTeamAddress != address(0));
-    require(_advisorAddress != address(0));
     require(_airdropAddress != address(0));
     require(_privateSaleAddress != address(0));
 
     walletAddress = _walletAddress;
-    founderAndTeamAddress = _founderAndTeamAddress;
-    advisorAddress = _advisorAddress;
     airdropAddress = _airdropAddress;
     privateSaleAddress = _privateSaleAddress;
 	
@@ -402,6 +531,7 @@ contract CoinBet is StandardToken, Pausable {
   function enableTransfer() public onlyOwner {
     require(isTransferable == false);
     isTransferable = true;
+    emit EnableTransfer();
   }
   
   function transferPrivateSale(address _to, uint256 _value) 
@@ -471,15 +601,49 @@ contract CoinBet is StandardToken, Pausable {
     balances[owner] = totalSupply;
 	  emit Transfer(0x0, owner, totalSupply);
 
-	  super.transfer(founderAndTeamAddress, founderAndTeamAllocation);
-    super.transfer(advisorAddress, advisorAllocation);
+    // airdrop and private sale token allocation
     super.transfer(airdropAddress, airdropAllocation);
     super.transfer(privateSaleAddress, privateSaleAllocation);
     
+    // bracket token allocation
     brackets.push(Bracket(tokenPerBracket, tokenPerBracket, 0));
     brackets.push(Bracket(tokenPerBracket, tokenPerBracket, 0));
     brackets.push(Bracket(tokenPerBracket, tokenPerBracket, 0));
-    brackets.push(Bracket(tokenPerBracket, tokenPerBracket, 0));
+    brackets.push(Bracket(tokenPerBracket, tokenPerBracket, 0));    
+
+    // allocation 15M token for team and founder
+    uint totalTeamMember = 3;
+    TokenLockInfo[] memory tokenLockInfos = new TokenLockInfo[](totalTeamMember);
+    tokenLockInfos[0] = TokenLockInfo(0x50ce0Eb4c1C1b64f0282f7b118Dfeb72449fbBe6, 5000000 * (10 ** decimals));
+    tokenLockInfos[1] = TokenLockInfo(0x13C82E64f460C1e000dF81080064665820756dB6, 5000000 * (10 ** decimals));
+    tokenLockInfos[2] = TokenLockInfo(0xd811A297C0E8E6fa3C69442903d0b073d9d5ff96, 5000000 * (10 ** decimals));    
+
+    uint i = 0;
+    TokenLockInfo memory tokenInfo;
+    address wallet;
+
+    for(i = 0; i < totalTeamMember; i++) {
+      tokenInfo = tokenLockInfos[i];
+      wallet = new LockedWalletForTeam(this, tokenInfo.owner, tokenInfo.tokenAmount);
+      teamWallets[tokenInfo.owner] = wallet;
+
+      super.transfer(wallet, tokenInfo.tokenAmount);
+    }
+
+    // allocation 3M token for advisor
+    uint totalAdvisor = 2;
+    tokenLockInfos = new TokenLockInfo[](totalAdvisor);
+    tokenLockInfos[0] = TokenLockInfo(0x50ce0Eb4c1C1b64f0282f7b118Dfeb72449fbBe6, 1500000 * (10 ** decimals));
+    tokenLockInfos[1] = TokenLockInfo(0x13C82E64f460C1e000dF81080064665820756dB6, 1500000 * (10 ** decimals));    
+
+    for(i = 0; i < totalAdvisor; i++) {
+      tokenInfo = tokenLockInfos[i];
+      wallet = new LockedWalletForAdvisor(this, tokenInfo.owner, tokenInfo.tokenAmount);
+      advisorWallets[tokenInfo.owner] = wallet;
+
+      super.transfer(wallet, tokenInfo.tokenAmount);
+    }
+
   }  
 
   function purchaseTokens() private {

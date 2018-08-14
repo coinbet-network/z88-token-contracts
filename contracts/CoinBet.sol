@@ -260,7 +260,6 @@ contract Pausable is Ownable {
 
 
 contract LockedWalletForTeam is Ownable {
-    
   uint256 public createdAt;
   ERC20 public tokenContract;
   uint256 public totalToken;
@@ -269,24 +268,45 @@ contract LockedWalletForTeam is Ownable {
   uint256 public secondUnlockDate;
   uint256 public thirdUnlockDate;
 
-  uint public withdrawStage;
+  uint public withdrawStage = 0;
+  bool public approvedWithdrawal = false;
 
-  event WithdrewTokens(address tokenContract, address to, uint256 amount);
+  address public approver1;
+  address public approver2;
+  
+  address public lastRejecter = address(0);
+  bool public canBurn = false;
+
+  event WithdrewTokens(address _tokenContract, address _to, uint256 _amount);
+  event ApprovedWithdrawal(address _from, uint _withdrawStage);
+  event RejectedWithdrawal(address _from, uint _withdrawStage);  
+
+  modifier onlyApprover() {
+    require(msg.sender == approver1 || msg.sender == approver2);
+    _;
+  }
 
   function LockedWalletForTeam(
     ERC20 _tokenContract,
     address _owner,
-    uint256 _totalToken
+    uint256 _totalToken,
+    address _approver1, 
+    address _approver2
   ) public {
+    require(_approver1 != address(0));
+    require(_approver2 != address(0));
+
     tokenContract = _tokenContract;
-    owner = _owner;    
+    owner = _owner;
     totalToken = _totalToken;
     createdAt = now;
-    withdrawStage = 0;
     
-    firstUnlockDate = now + (11 * 30 * 1 days); // Allow withdraw 20% after 11 month    
-    secondUnlockDate = now + (23 * 30 * 1 days); // Allow withdraw 30% after 23 month
-    thirdUnlockDate = now + (35 * 30 * 1 days); // Allow withdraw all after 35 month
+    firstUnlockDate = now + (12 * 30 days); // Allow withdraw 20% after 12 month    
+    secondUnlockDate = now + (24 * 30 days); // Allow withdraw 30% after 24 month
+    thirdUnlockDate = now + (36 * 30 days); // Allow withdraw all after 36 month    
+
+    approver1 = _approver1;
+    approver2 = _approver2;
   }
   
   function() payable public { 
@@ -295,7 +315,7 @@ contract LockedWalletForTeam is Ownable {
 
   // callable by owner only, after specified time
   function withdrawTokens() onlyOwner public {
-    require(now > firstUnlockDate);
+    require(now > firstUnlockDate && approvedWithdrawal);
 
     uint256 amount = 0;
     if(now > thirdUnlockDate) {
@@ -313,6 +333,7 @@ contract LockedWalletForTeam is Ownable {
       tokenContract.transfer(msg.sender, amount);
       emit WithdrewTokens(tokenContract, msg.sender, amount);
       withdrawStage = withdrawStage + 1;
+      approvedWithdrawal = false;
       return;
     }
 
@@ -322,7 +343,24 @@ contract LockedWalletForTeam is Ownable {
   function info() public view returns(address, uint256, uint256) {
     uint256 tokenBalance = tokenContract.balanceOf(this);
     return (owner, createdAt, tokenBalance);
+  }  
+
+  function approveWithdrawal() public onlyApprover {
+    require(!approvedWithdrawal);
+
+    approvedWithdrawal = true;
+    emit ApprovedWithdrawal(msg.sender, withdrawStage);
   }
+
+  function rejectWithdrawal() public onlyApprover {
+    require(!canBurn && lastRejecter != msg.sender);
+
+    if(lastRejecter != address(0))
+      canBurn = true;
+
+    lastRejecter = msg.sender;
+    emit RejectedWithdrawal(msg.sender, withdrawStage);
+  }  
 }
 
 
@@ -350,8 +388,8 @@ contract LockedWalletForAdvisor is Ownable {
     createdAt = now;
     withdrawStage = 0;
     
-    firstUnlockDate = now + (5 * 30 * 1 days); // Allow withdraw 50% after 5 month    
-    secondUnlockDate = now + (11 * 30 * 1 days); // Allow withdraw all after 11 month    
+    firstUnlockDate = now + (6 * 30 days); // Allow withdraw 50% after 6 month    
+    secondUnlockDate = now + (12 * 30 days); // Allow withdraw all after 12 month    
   }
   
   function() payable public { 
@@ -394,13 +432,13 @@ contract CoinBet is StandardToken, Pausable {
   string public constant name = "Coinbet";
   string public constant symbol = "Z88";  
   uint256 public constant decimals = 18;
-  uint256 public constant totalSupply = 100000000 * (10 ** 18); // 100M token will be supplied
+  uint256 public totalSupply = 100000000 * (10 ** decimals); // 100M token will be supplied
 
-  uint256 public constant founderAndTeamAllocation = 15000000 * (10 ** 18); // 15M tokens allocated for founders and team
-  uint256 public constant advisorAllocation = 3000000 * (10 ** 18); // 3M tokens allocated for advisors
-  uint256 public constant airdropAllocation = 2000000 * (10 ** 18); // 2M tokens allocated for airdrops
-  uint256 public constant privateSaleAllocation = 40000000 * (10 ** 18); // 40M tokens allocated for private sale
-  uint256 public constant tokenPerBracket = 10000000 * (10 ** 18); // 4 brackets with 10M tokens per one - total 40M tokens for public sale    
+  uint256 public constant founderAndTeamAllocation = 15000000 * (10 ** decimals); // 15M tokens allocated for founders and team
+  uint256 public constant advisorAllocation = 3000000 * (10 ** decimals); // 3M tokens allocated for advisors
+  uint256 public constant airdropAllocation = 2000000 * (10 ** decimals); // 2M tokens allocated for airdrops
+  uint256 public constant privateSaleAllocation = 40000000 * (10 ** decimals); // 40M tokens allocated for private sale
+  uint256 public constant tokenPerBracket = 10000000 * (10 ** decimals); // 4 brackets with 10M tokens per one - total 40M tokens for public sale    
   uint256 public constant minAcceptedAmount = 0.1 * (1 ether); // 0.1 ether for mininum ether acception in public sale  
   
   address public walletAddress;
@@ -409,6 +447,7 @@ contract CoinBet is StandardToken, Pausable {
 
   bool public isTransferable = false;
   bool public isPublicSelling = false;
+  bool public isEndSelling = false;
 
   struct Bracket {
     uint256 total;
@@ -434,6 +473,7 @@ contract CoinBet is StandardToken, Pausable {
   event EndPublicSale(); // end public sale
   event ChangeBracketIndex(uint bracketIndex); // change to next bracket for sale  
   event EnableTransfer();
+  event BurnMemberToken(address lockedWallet, address memberAddress, uint256 amount);
 
   modifier onlyPrivateSaleOrOwner() {
     require(msg.sender == privateSaleAddress || msg.sender == owner);
@@ -544,7 +584,8 @@ contract CoinBet is StandardToken, Pausable {
 
     balances[privateSaleAddress] = balances[privateSaleAddress].sub(_value);
     balances[_to] = balances[_to].add(_value);
-    emit PrivateSale(_to, _value);
+    emit Transfer(privateSaleAddress, _to, _value);
+    emit PrivateSale(_to, _value);    
     return true;    
   }
   
@@ -574,6 +615,7 @@ contract CoinBet is StandardToken, Pausable {
   function endPublicSale() public onlyOwner returns (bool success) {
     require(isPublicSelling == true);
     isPublicSelling = false;
+    isEndSelling = true;
     isTransferable = true;
     emit EndPublicSale();
     return true;
@@ -588,6 +630,7 @@ contract CoinBet is StandardToken, Pausable {
     // last bracket - end public sale
     if(currentBracketIndex == brackets.length - 1) {
       isPublicSelling = false;
+      isEndSelling = true;
       isTransferable = true;
       emit EndPublicSale();
     }        
@@ -599,7 +642,7 @@ contract CoinBet is StandardToken, Pausable {
   
   function initTokenAndBrackets() private {
     balances[owner] = totalSupply;
-	  emit Transfer(0x0, owner, totalSupply);
+	  emit Transfer(address(0), owner, totalSupply);
 
     // airdrop and private sale token allocation
     super.transfer(airdropAddress, airdropAllocation);
@@ -622,9 +665,13 @@ contract CoinBet is StandardToken, Pausable {
     TokenLockInfo memory tokenInfo;
     address wallet;
 
+    //admin approve member to withdrew
+    address admin1 = 0x50ce0Eb4c1C1b64f0282f7b118Dfeb72449fbBe6;
+    address admin2 = 0x13C82E64f460C1e000dF81080064665820756dB6;
+
     for(i = 0; i < totalTeamMember; i++) {
       tokenInfo = tokenLockInfos[i];
-      wallet = new LockedWalletForTeam(this, tokenInfo.owner, tokenInfo.tokenAmount);
+      wallet = new LockedWalletForTeam(this, tokenInfo.owner, tokenInfo.tokenAmount, admin1, admin2);
       teamWallets[tokenInfo.owner] = wallet;
 
       super.transfer(wallet, tokenInfo.tokenAmount);
@@ -651,7 +698,7 @@ contract CoinBet is StandardToken, Pausable {
     require(bracket.tokenPerEther > 0);
     require(bracket.remainToken > 0);
 
-    uint256 tokenPerEther = bracket.tokenPerEther.mul(10 ** 18);
+    uint256 tokenPerEther = bracket.tokenPerEther.mul(10 ** decimals);
     uint256 remainToken = bracket.remainToken;
     uint256 tokenAmount = msg.value.mul(tokenPerEther).div(1 ether);
     uint256 refundAmount = 0;
@@ -665,17 +712,34 @@ contract CoinBet is StandardToken, Pausable {
     bracket.remainToken = bracket.remainToken.sub(tokenAmount);
     balances[owner] = balances[owner].sub(tokenAmount);
     balances[msg.sender] = balances[msg.sender].add(tokenAmount);
+    emit Transfer(owner, msg.sender, tokenAmount);
+    emit PublicSale(msg.sender, paymentAmount, tokenAmount);
 
     uint256 paymentAmount = msg.value.sub(refundAmount);
     walletAddress.transfer(paymentAmount);
     if(refundAmount > 0)      
       msg.sender.transfer(refundAmount);
-    emit PublicSale(msg.sender, paymentAmount, tokenAmount);
 
     // end current bracket and move to next bracket
     if(bracket.remainToken == 0) {      
       nextBracket();
     }
+  }
+
+  function burnMemberToken(address memberAddress) public onlyOwner {    
+    address lockedWalletAddress = teamWallets[memberAddress];
+    require(lockedWalletAddress != address(0));
+
+    LockedWalletForTeam lockedWallet = LockedWalletForTeam(lockedWalletAddress);
+    bool canBurn = lockedWallet.canBurn();
+    require(canBurn);
+
+    uint256 amount = balances[lockedWalletAddress];
+    balances[lockedWalletAddress] = balances[lockedWalletAddress].sub(amount);
+    totalSupply = totalSupply.sub(amount);
+
+    emit Transfer(lockedWalletAddress, address(0), amount);
+    emit BurnMemberToken(lockedWalletAddress, memberAddress, amount);
   }
 	
 }

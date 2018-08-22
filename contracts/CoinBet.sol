@@ -1,6 +1,8 @@
 /* solium-disable */
-pragma solidity ^0.4.21;
+pragma solidity ^0.4.24;
 
+// import 'openzeppelin-solidity/contracts/token/ERC20/StandardToken.sol';
+// import 'openzeppelin-solidity/contracts/ownership/Ownable.sol';
 
 /**
  * @title SafeMath
@@ -11,39 +13,43 @@ library SafeMath {
   /**
   * @dev Multiplies two numbers, throws on overflow.
   */
-  function mul(uint256 a, uint256 b) internal pure returns (uint256) {
-    if (a == 0) {
+  function mul(uint256 _a, uint256 _b) internal pure returns (uint256 c) {
+    // Gas optimization: this is cheaper than asserting 'a' not being zero, but the
+    // benefit is lost if 'b' is also tested.
+    // See: https://github.com/OpenZeppelin/openzeppelin-solidity/pull/522
+    if (_a == 0) {
       return 0;
     }
-    uint256 c = a * b;
-    assert(c / a == b);
+
+    c = _a * _b;
+    assert(c / _a == _b);
     return c;
   }
 
   /**
   * @dev Integer division of two numbers, truncating the quotient.
   */
-  function div(uint256 a, uint256 b) internal pure returns (uint256) {
-    // assert(b > 0); // Solidity automatically throws when dividing by 0
-    uint256 c = a / b;
-    // assert(a == b * c + a % b); // There is no case in which this doesn't hold
-    return c;
+  function div(uint256 _a, uint256 _b) internal pure returns (uint256) {
+    // assert(_b > 0); // Solidity automatically throws when dividing by 0
+    // uint256 c = _a / _b;
+    // assert(_a == _b * c + _a % _b); // There is no case in which this doesn't hold
+    return _a / _b;
   }
 
   /**
   * @dev Subtracts two numbers, throws on overflow (i.e. if subtrahend is greater than minuend).
   */
-  function sub(uint256 a, uint256 b) internal pure returns (uint256) {
-    assert(b <= a);
-    return a - b;
+  function sub(uint256 _a, uint256 _b) internal pure returns (uint256) {
+    assert(_b <= _a);
+    return _a - _b;
   }
 
   /**
   * @dev Adds two numbers, throws on overflow.
   */
-  function add(uint256 a, uint256 b) internal pure returns (uint256) {
-    uint256 c = a + b;
-    assert(c >= a);
+  function add(uint256 _a, uint256 _b) internal pure returns (uint256 c) {
+    c = _a + _b;
+    assert(c >= _a);
     return c;
   }
 }
@@ -52,15 +58,13 @@ library SafeMath {
 /**
  * @title ERC20Basic
  * @dev Simpler version of ERC20 interface
- * @dev see https://github.com/ethereum/EIPs/issues/179
+ * See https://github.com/ethereum/EIPs/issues/179
  */
 contract ERC20Basic {
-  uint256 public totalSupply;
-  function balanceOf(address who) public view returns (uint256);
-  function transfer(address to, uint256 value) public returns (bool);
-  
-  event Transfer(address indexed _from, address indexed _to, uint _value);
-  //event Transfer(address indexed from, address indexed to, uint256 value);
+  function totalSupply() public view returns (uint256);
+  function balanceOf(address _who) public view returns (uint256);
+  function transfer(address _to, uint256 _value) public returns (bool);
+  event Transfer(address indexed from, address indexed to, uint256 value);
 }
 
 
@@ -69,30 +73,48 @@ contract ERC20Basic {
  * @dev see https://github.com/ethereum/EIPs/issues/20
  */
 contract ERC20 is ERC20Basic {
-  function allowance(address owner, address spender) public view returns (uint256);
-  function transferFrom(address from, address to, uint256 value) public returns (bool);
-  function approve(address spender, uint256 value) public returns (bool);
-  
-  event Approval(address indexed _owner, address indexed _spender, uint _value);
-  //event Approval(address indexed owner, address indexed spender, uint256 value);
+  function allowance(address _owner, address _spender)
+    public view returns (uint256);
+
+  function transferFrom(address _from, address _to, uint256 _value)
+    public returns (bool);
+
+  function approve(address _spender, uint256 _value) public returns (bool);
+  event Approval(
+    address indexed owner,
+    address indexed spender,
+    uint256 value
+  );
 }
 
 
 /**
  * @title Basic token
- * @dev Basic version of StandardToken, with no allowances. 
+ * @dev Basic version of StandardToken, with no allowances.
  */
 contract BasicToken is ERC20Basic {
   using SafeMath for uint256;
 
-  mapping(address => uint256) balances;
+  mapping(address => uint256) internal balances;
+
+  uint256 internal totalSupply_;
 
   /**
-  * @dev transfer token for a specified address
+  * @dev Total number of tokens in existence
+  */
+  function totalSupply() public view returns (uint256) {
+    return totalSupply_;
+  }
+
+  /**
+  * @dev Transfer token for a specified address
   * @param _to The address to transfer to.
   * @param _value The amount to be transferred.
   */
   function transfer(address _to, uint256 _value) public returns (bool) {
+    require(_value <= balances[msg.sender]);
+    require(_to != address(0));
+
     balances[msg.sender] = balances[msg.sender].sub(_value);
     balances[_to] = balances[_to].add(_value);
     emit Transfer(msg.sender, _to, _value);
@@ -101,10 +123,10 @@ contract BasicToken is ERC20Basic {
 
   /**
   * @dev Gets the balance of the specified address.
-  * @param _owner The address to query the the balance of. 
+  * @param _owner The address to query the the balance of.
   * @return An uint256 representing the amount owned by the passed address.
   */
-  function balanceOf(address _owner) public view returns (uint256 balance) {
+  function balanceOf(address _owner) public view returns (uint256) {
     return balances[_owner];
   }
 
@@ -115,45 +137,49 @@ contract BasicToken is ERC20Basic {
  * @title Standard ERC20 token
  *
  * @dev Implementation of the basic standard token.
- * @dev https://github.com/ethereum/EIPs/issues/20
- * @dev Based on code by FirstBlood: https://github.com/Firstbloodio/token/blob/master/smart_contract/FirstBloodToken.sol
+ * https://github.com/ethereum/EIPs/issues/20
+ * Based on code by FirstBlood: https://github.com/Firstbloodio/token/blob/master/smart_contract/FirstBloodToken.sol
  */
 contract StandardToken is ERC20, BasicToken {
 
-  mapping (address => mapping (address => uint256)) allowed;
+  mapping (address => mapping (address => uint256)) internal allowed;
 
 
   /**
    * @dev Transfer tokens from one address to another
    * @param _from address The address which you want to send tokens from
    * @param _to address The address which you want to transfer to
-   * @param _value uint256 the amout of tokens to be transfered
+   * @param _value uint256 the amount of tokens to be transferred
    */
-  function transferFrom(address _from, address _to, uint256 _value) public returns (bool) {  
-    // Check is not needed because sub(_allowance, _value) will already throw if this condition is not met
-    // require (_value <= _allowance);
+  function transferFrom(
+    address _from,
+    address _to,
+    uint256 _value
+  )
+    public
+    returns (bool)
+  {
+    require(_value <= balances[_from]);
+    require(_value <= allowed[_from][msg.sender]);
+    require(_to != address(0));
 
     balances[_from] = balances[_from].sub(_value);
     balances[_to] = balances[_to].add(_value);
-    //balances[_from] = balances[_from].sub(_value); // this was removed
     allowed[_from][msg.sender] = allowed[_from][msg.sender].sub(_value);
     emit Transfer(_from, _to, _value);
     return true;
   }
 
   /**
-   * @dev Aprove the passed address to spend the specified amount of tokens on behalf of msg.sender.
+   * @dev Approve the passed address to spend the specified amount of tokens on behalf of msg.sender.
+   * Beware that changing an allowance with this method brings the risk that someone may use both the old
+   * and the new allowance by unfortunate transaction ordering. One possible solution to mitigate this
+   * race condition is to first reduce the spender's allowance to 0 and set the desired value afterwards:
+   * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
    * @param _spender The address which will spend the funds.
    * @param _value The amount of tokens to be spent.
    */
   function approve(address _spender, uint256 _value) public returns (bool) {
-
-    // To change the approve amount you first have to reduce the addresses`
-    //  allowance to zero by calling `approve(_spender, 0)` if it is not
-    //  already 0 to mitigate the race condition described here:
-    //  https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
-    require((_value == 0) || (allowed[msg.sender][_spender] == 0));
-
     allowed[msg.sender][_spender] = _value;
     emit Approval(msg.sender, _spender, _value);
     return true;
@@ -163,10 +189,65 @@ contract StandardToken is ERC20, BasicToken {
    * @dev Function to check the amount of tokens that an owner allowed to a spender.
    * @param _owner address The address which owns the funds.
    * @param _spender address The address which will spend the funds.
-   * @return A uint256 specifing the amount of tokens still avaible for the spender.
+   * @return A uint256 specifying the amount of tokens still available for the spender.
    */
-  function allowance(address _owner, address _spender) public view returns (uint256 remaining) {
+  function allowance(
+    address _owner,
+    address _spender
+   )
+    public
+    view
+    returns (uint256)
+  {
     return allowed[_owner][_spender];
+  }
+
+  /**
+   * @dev Increase the amount of tokens that an owner allowed to a spender.
+   * approve should be called when allowed[_spender] == 0. To increment
+   * allowed value is better to use this function to avoid 2 calls (and wait until
+   * the first transaction is mined)
+   * From MonolithDAO Token.sol
+   * @param _spender The address which will spend the funds.
+   * @param _addedValue The amount of tokens to increase the allowance by.
+   */
+  function increaseApproval(
+    address _spender,
+    uint256 _addedValue
+  )
+    public
+    returns (bool)
+  {
+    allowed[msg.sender][_spender] = (
+      allowed[msg.sender][_spender].add(_addedValue));
+    emit Approval(msg.sender, _spender, allowed[msg.sender][_spender]);
+    return true;
+  }
+
+  /**
+   * @dev Decrease the amount of tokens that an owner allowed to a spender.
+   * approve should be called when allowed[_spender] == 0. To decrement
+   * allowed value is better to use this function to avoid 2 calls (and wait until
+   * the first transaction is mined)
+   * From MonolithDAO Token.sol
+   * @param _spender The address which will spend the funds.
+   * @param _subtractedValue The amount of tokens to decrease the allowance by.
+   */
+  function decreaseApproval(
+    address _spender,
+    uint256 _subtractedValue
+  )
+    public
+    returns (bool)
+  {
+    uint256 oldValue = allowed[msg.sender][_spender];
+    if (_subtractedValue >= oldValue) {
+      allowed[msg.sender][_spender] = 0;
+    } else {
+      allowed[msg.sender][_spender] = oldValue.sub(_subtractedValue);
+    }
+    emit Approval(msg.sender, _spender, allowed[msg.sender][_spender]);
+    return true;
   }
 
 }
@@ -181,14 +262,20 @@ contract Ownable {
   address public owner;
 
 
+  event OwnershipRenounced(address indexed previousOwner);
+  event OwnershipTransferred(
+    address indexed previousOwner,
+    address indexed newOwner
+  );
+
+
   /**
    * @dev The Ownable constructor sets the original `owner` of the contract to the sender
    * account.
    */
-  function Ownable() public {
+  constructor() public {
     owner = msg.sender;
   }
-
 
   /**
    * @dev Throws if called by any account other than the owner.
@@ -198,236 +285,63 @@ contract Ownable {
     _;
   }
 
+  /**
+   * @dev Allows the current owner to relinquish control of the contract.
+   * @notice Renouncing to ownership will leave the contract without an owner.
+   * It will not be possible to call the functions with the `onlyOwner`
+   * modifier anymore.
+   */
+  function renounceOwnership() public onlyOwner {
+    emit OwnershipRenounced(owner);
+    owner = address(0);
+  }
 
   /**
    * @dev Allows the current owner to transfer control of the contract to a newOwner.
-   * @param newOwner The address to transfer ownership to.
+   * @param _newOwner The address to transfer ownership to.
    */
-  function transferOwnership(address newOwner) public onlyOwner {
-    if (newOwner != address(0)) {
-      owner = newOwner;
-    }
-  }
-
-}
-
-
-/**
- * @title Pausable
- * @dev Base contract which allows children to implement an emergency stop mechanism.
- */
-contract Pausable is Ownable {
-  event Pause();
-  event Unpause();
-
-  bool public paused = false;
-
-
-  /**
-  * @dev modifier to allow actions only when the contract IS paused
-  */
-  modifier whenNotPaused() {
-    require (!paused);
-    _;
+  function transferOwnership(address _newOwner) public onlyOwner {
+    _transferOwnership(_newOwner);
   }
 
   /**
-  * @dev modifier to allow actions only when the contract IS NOT paused
-  */
-  modifier whenPaused {
-    require (paused);
-    _;
-  }
-
-  /**
-  * @dev called by the owner to pause, triggers stopped state
-  */
-  function pause() public onlyOwner whenNotPaused returns (bool) {
-    paused = true;
-    emit Pause();
-    return true;
-  }
-
-  /**
-  * @dev called by the owner to unpause, returns to normal state
-  */
-  function unpause() public onlyOwner whenPaused returns (bool) {
-    paused = false;
-    emit Unpause();
-    return true;
+   * @dev Transfers control of the contract to a newOwner.
+   * @param _newOwner The address to transfer ownership to.
+   */
+  function _transferOwnership(address _newOwner) internal {
+    require(_newOwner != address(0));
+    emit OwnershipTransferred(owner, _newOwner);
+    owner = _newOwner;
   }
 }
 
 
-contract LockedWalletForTeam is Ownable {
-  uint256 public createdAt;
-  ERC20 public tokenContract;
-  uint256 public totalToken;
-
-  uint256 public firstUnlockDate;
-  uint256 public secondUnlockDate;
-  uint256 public thirdUnlockDate;
-
-  uint public withdrawStage = 0;
-  bool public approvedWithdrawal = false;
-
-  address public approver1;
-  address public approver2;
-  
-  address public lastRejecter = address(0);
-  bool public canBurn = false;
-
-  event WithdrewTokens(address _tokenContract, address _to, uint256 _amount);
-  event ApprovedWithdrawal(address _from, uint _withdrawStage);
-  event RejectedWithdrawal(address _from, uint _withdrawStage);  
-
-  modifier onlyApprover() {
-    require(msg.sender == approver1 || msg.sender == approver2);
-    _;
-  }
-
-  function LockedWalletForTeam(
-    ERC20 _tokenContract,
-    address _owner,
-    uint256 _totalToken,
-    address _approver1, 
-    address _approver2
-  ) public {
-    require(_approver1 != address(0));
-    require(_approver2 != address(0));
-
-    tokenContract = _tokenContract;
-    owner = _owner;
-    totalToken = _totalToken;
-    createdAt = now;
-    
-    firstUnlockDate = now + (12 * 30 days); // Allow withdraw 20% after 12 month    
-    secondUnlockDate = now + (24 * 30 days); // Allow withdraw 30% after 24 month
-    thirdUnlockDate = now + (36 * 30 days); // Allow withdraw all after 36 month    
-
-    approver1 = _approver1;
-    approver2 = _approver2;
-  }
-  
-  function() payable public { 
-    revert();
-  }
-
-  // callable by owner only, after specified time
-  function withdrawTokens() onlyOwner public {
-    require(now > firstUnlockDate && approvedWithdrawal);
-
-    uint256 amount = 0;
-    if(now > thirdUnlockDate) {
-      // withdrew all remain token in second stage
-      amount = tokenContract.balanceOf(this);      
-    } else if(now > secondUnlockDate && withdrawStage == 1) {
-      // withdrew 30% in second stage
-      amount = totalToken * 30 / 100;
-    } else if(now > firstUnlockDate && withdrawStage == 0){
-      // withdrew 20% in first stage
-      amount = totalToken * 20 / 100;
-    }
-
-    if(amount > 0) {
-      tokenContract.transfer(msg.sender, amount);
-      emit WithdrewTokens(tokenContract, msg.sender, amount);
-      withdrawStage = withdrawStage + 1;
-      approvedWithdrawal = false;
-      return;
-    }
-
-    revert();
-  }
-
-  function info() public view returns(address, uint256, uint256) {
-    uint256 tokenBalance = tokenContract.balanceOf(this);
-    return (owner, createdAt, tokenBalance);
-  }  
-
-  function approveWithdrawal() public onlyApprover {
-    require(!approvedWithdrawal);
-
-    approvedWithdrawal = true;
-    emit ApprovedWithdrawal(msg.sender, withdrawStage);
-  }
-
-  function rejectWithdrawal() public onlyApprover {
-    require(!canBurn && lastRejecter != msg.sender);
-
-    if(lastRejecter != address(0))
-      canBurn = true;
-
-    lastRejecter = msg.sender;
-    emit RejectedWithdrawal(msg.sender, withdrawStage);
-  }  
+contract ITeamWallet {
+  function canBurn(address _member) public view returns(bool);  
+  function addMember(address _member, uint256 _tokenAmount) public;
+  function setAllocateTokenDone() public;
+  function getMemberTokenRemain(address _member) public view returns (uint256);
+  function burnMemberToken(address _memberAddress) public;
 }
 
 
-contract LockedWalletForAdvisor is Ownable {
-    
-  uint256 public createdAt;
-  ERC20 public tokenContract;
-  uint256 public totalToken;
+contract IAdvisorWallet {    
+  function addAdvisor(address _member, uint256 _tokenAmount) public;
+  function setAllocateTokenDone() public;
+}
 
-  uint256 public firstUnlockDate;
-  uint256 public secondUnlockDate;  
 
-  uint public withdrawStage;
-
-  event WithdrewTokens(address tokenContract, address to, uint256 amount);
-
-  function LockedWalletForAdvisor(
-    ERC20 _tokenContract,
-    address _owner,
-    uint256 _totalToken
-  ) public {
-    tokenContract = _tokenContract;
-    owner = _owner;    
-    totalToken = _totalToken;
-    createdAt = now;
-    withdrawStage = 0;
-    
-    firstUnlockDate = now + (6 * 30 days); // Allow withdraw 50% after 6 month    
-    secondUnlockDate = now + (12 * 30 days); // Allow withdraw all after 12 month    
-  }
-  
-  function() payable public { 
-    revert();
-  }
-
-  // callable by owner only, after specified time
-  function withdrawTokens() onlyOwner public {
-    require(now > firstUnlockDate);
-
-    uint256 amount = 0;
-    if(now > secondUnlockDate) {
-      // withdrew all remain token in second stage
-      amount = tokenContract.balanceOf(this);
-    } else if(now > firstUnlockDate && withdrawStage == 0){
-      // withdrew 50% in first stage
-      amount = totalToken * 50 / 100;
-    }
-
-    if(amount > 0) {
-      tokenContract.transfer(msg.sender, amount);
-      emit WithdrewTokens(tokenContract, msg.sender, amount);
-      withdrawStage = withdrawStage + 1;
-      return;
-    }
-
-    revert();
-  }
-
-  function info() public view returns(address, uint256, uint256) {
-    uint256 tokenBalance = tokenContract.balanceOf(this);
-    return (owner, createdAt, tokenBalance);
+library DataLib {
+  struct Bracket {
+    uint256 total;
+    uint256 remainToken;
+    uint256 tokenPerEther;    
   }
 }
 
 
 // ================= Coinbet Token =======================
-contract CoinBet is StandardToken, Pausable {
+contract CoinBet is StandardToken, Ownable {
   
   string public constant name = "Coinbet";
   string public constant symbol = "Z88";  
@@ -447,24 +361,13 @@ contract CoinBet is StandardToken, Pausable {
 
   bool public isTransferable = false;
   bool public isPublicSelling = false;
-  bool public isEndSelling = false;
-
-  struct Bracket {
-    uint256 total;
-    uint256 remainToken;
-    uint256 tokenPerEther;    
-  }
-
-  struct TokenLockInfo {
-    address owner;
-    uint256 tokenAmount;    
-  }
+  bool public isEndSelling = false;    
     
-  Bracket[] public brackets;  
-  uint public currentBracketIndex = 0;
+  DataLib.Bracket[4] public brackets;  
+  uint public currentBracketIndex = 0;  
 
-  mapping(address => address) public teamWallets;
-  mapping(address => address) public advisorWallets;
+  address public teamWalletAddress = address(0);
+  address public advisorWalletAddress = address(0);
 
   event PrivateSale(address to, uint256 tokenAmount); // Transfer token to investors
   event PublicSale(address to, uint256 amount, uint256 tokenAmount); // Investors purchase token in public sale
@@ -490,7 +393,7 @@ contract CoinBet is StandardToken, Pausable {
     _;
   }
 
-  function CoinBet(    
+  constructor(    
     address _walletAddress,    
     address _airdropAddress, 
     address _privateSaleAddress
@@ -524,13 +427,12 @@ contract CoinBet is StandardToken, Pausable {
       uint256 tokenPerEther
     ) 
   {    
-    Bracket memory bracket = brackets[currentBracketIndex];
+    DataLib.Bracket memory bracket = brackets[currentBracketIndex];
     return (currentBracketIndex, bracket.total, bracket.remainToken, bracket.tokenPerEther);
   }
 
   function transfer(address _to, uint256 _value) 
-    public 
-    whenNotPaused 
+    public
     transferable 
     returns (bool success) 
   {
@@ -541,7 +443,6 @@ contract CoinBet is StandardToken, Pausable {
 
   function transferFrom(address _from, address _to, uint256 _value) 
     public 
-    whenNotPaused 
     transferable 
     returns (bool success) 
   {
@@ -553,7 +454,6 @@ contract CoinBet is StandardToken, Pausable {
 
   function approve(address _spender, uint256 _value) 
     public 
-    whenNotPaused 
     transferable 
     returns (bool success) 
   {
@@ -562,20 +462,20 @@ contract CoinBet is StandardToken, Pausable {
     return super.approve(_spender, _value);
   }
 
-  function changeWalletAddress(address _newAddress) public onlyOwner {
+  function changeWalletAddress(address _newAddress) external onlyOwner {
     require(_newAddress != address(0));
     require(walletAddress != _newAddress);
     walletAddress = _newAddress;
   }
 
-  function enableTransfer() public onlyOwner {
+  function enableTransfer() external onlyOwner {
     require(isTransferable == false);
     isTransferable = true;
     emit EnableTransfer();
   }
   
   function transferPrivateSale(address _to, uint256 _value) 
-    public 
+    external 
     onlyPrivateSaleOrOwner 
     returns (bool success) 
   {
@@ -590,29 +490,29 @@ contract CoinBet is StandardToken, Pausable {
   }
   
   function setBracketPrice(uint _bracketIndex, uint256 _tokenPerEther) 
-    public 
+    external 
     onlyOwner 
     returns (bool success) 
   {
     require(_tokenPerEther > 0);
     require(brackets.length > _bracketIndex);
     require(_bracketIndex >= currentBracketIndex);
-    Bracket storage bracket = brackets[_bracketIndex];
+    DataLib.Bracket storage bracket = brackets[_bracketIndex];
     bracket.tokenPerEther = _tokenPerEther;
     emit SetBracketPrice(_bracketIndex, _tokenPerEther);
     return true;
   }
 
-  function startPublicSale() public onlyOwner returns (bool success) {
+  function startPublicSale() external onlyOwner returns (bool success) {
     require(isPublicSelling == false);    
-    Bracket memory bracket = brackets[currentBracketIndex];
+    DataLib.Bracket memory bracket = brackets[currentBracketIndex];
     require(bracket.tokenPerEther > 0);
     isPublicSelling = true;
     emit StartPublicSale(bracket.tokenPerEther);
     return true;
   }
 
-  function endPublicSale() public onlyOwner returns (bool success) {
+  function endPublicSale() external onlyOwner returns (bool success) {
     require(isPublicSelling == true);
     isPublicSelling = false;
     isEndSelling = true;
@@ -621,11 +521,39 @@ contract CoinBet is StandardToken, Pausable {
     return true;
   }
 
-  function saleToNextBracket() public onlyOwner {
+  function saleToNextBracket() external onlyOwner {
     require(isPublicSelling == true);    
     return nextBracket();
   }
+  
+  function allocateTokenForTeam(address _teamWallet) external onlyOwner {
+    require(teamWalletAddress == address(0) && _teamWallet != address(0));    
+    teamWalletAddress = _teamWallet;
+    ITeamWallet teamWallet = ITeamWallet(teamWalletAddress);    
 
+    // allocation 15M token for team and founder
+    teamWallet.addMember(0x50ce0Eb4c1C1b64f0282f7b118Dfeb72449fbBe6, 5000000 * (10 ** decimals));  
+    teamWallet.addMember(0x13C82E64f460C1e000dF81080064665820756dB6, 5000000 * (10 ** decimals));
+    teamWallet.addMember(0xd811A297C0E8E6fa3C69442903d0b073d9d5ff96, 5000000 * (10 ** decimals));        
+    teamWallet.setAllocateTokenDone();
+
+    super.transfer(teamWalletAddress, founderAndTeamAllocation);
+  }
+
+  function allocateTokenForAdvisor(address _advisorWallet) external onlyOwner {
+    require(advisorWalletAddress == address(0) && _advisorWallet != address(0));
+    
+    advisorWalletAddress = _advisorWallet;
+    IAdvisorWallet advisorWallet = IAdvisorWallet(advisorWalletAddress);    
+
+    // allocation 3M token for advisor    
+    advisorWallet.addAdvisor(0x50ce0Eb4c1C1b64f0282f7b118Dfeb72449fbBe6, 1500000 * (10 ** decimals));
+    advisorWallet.addAdvisor(0x13C82E64f460C1e000dF81080064665820756dB6, 1500000 * (10 ** decimals));
+    advisorWallet.setAllocateTokenDone();
+
+    super.transfer(advisorWalletAddress, advisorAllocation);
+  }
+  
   function nextBracket() private {
     // last bracket - end public sale
     if(currentBracketIndex == brackets.length - 1) {
@@ -649,52 +577,14 @@ contract CoinBet is StandardToken, Pausable {
     super.transfer(privateSaleAddress, privateSaleAllocation);
     
     // bracket token allocation
-    brackets.push(Bracket(tokenPerBracket, tokenPerBracket, 0));
-    brackets.push(Bracket(tokenPerBracket, tokenPerBracket, 0));
-    brackets.push(Bracket(tokenPerBracket, tokenPerBracket, 0));
-    brackets.push(Bracket(tokenPerBracket, tokenPerBracket, 0));    
-
-    // allocation 15M token for team and founder
-    uint totalTeamMember = 3;
-    TokenLockInfo[] memory tokenLockInfos = new TokenLockInfo[](totalTeamMember);
-    tokenLockInfos[0] = TokenLockInfo(0x50ce0Eb4c1C1b64f0282f7b118Dfeb72449fbBe6, 5000000 * (10 ** decimals));
-    tokenLockInfos[1] = TokenLockInfo(0x13C82E64f460C1e000dF81080064665820756dB6, 5000000 * (10 ** decimals));
-    tokenLockInfos[2] = TokenLockInfo(0xd811A297C0E8E6fa3C69442903d0b073d9d5ff96, 5000000 * (10 ** decimals));    
-
-    uint i = 0;
-    TokenLockInfo memory tokenInfo;
-    address wallet;
-
-    //admin approve member to withdrew
-    address admin1 = 0x50ce0Eb4c1C1b64f0282f7b118Dfeb72449fbBe6;
-    address admin2 = 0x13C82E64f460C1e000dF81080064665820756dB6;
-
-    for(i = 0; i < totalTeamMember; i++) {
-      tokenInfo = tokenLockInfos[i];
-      wallet = new LockedWalletForTeam(this, tokenInfo.owner, tokenInfo.tokenAmount, admin1, admin2);
-      teamWallets[tokenInfo.owner] = wallet;
-
-      super.transfer(wallet, tokenInfo.tokenAmount);
-    }
-
-    // allocation 3M token for advisor
-    uint totalAdvisor = 2;
-    tokenLockInfos = new TokenLockInfo[](totalAdvisor);
-    tokenLockInfos[0] = TokenLockInfo(0x50ce0Eb4c1C1b64f0282f7b118Dfeb72449fbBe6, 1500000 * (10 ** decimals));
-    tokenLockInfos[1] = TokenLockInfo(0x13C82E64f460C1e000dF81080064665820756dB6, 1500000 * (10 ** decimals));    
-
-    for(i = 0; i < totalAdvisor; i++) {
-      tokenInfo = tokenLockInfos[i];
-      wallet = new LockedWalletForAdvisor(this, tokenInfo.owner, tokenInfo.tokenAmount);
-      advisorWallets[tokenInfo.owner] = wallet;
-
-      super.transfer(wallet, tokenInfo.tokenAmount);
-    }
-
-  }  
+    brackets[0] = DataLib.Bracket(tokenPerBracket, tokenPerBracket, 0);
+    brackets[1] = DataLib.Bracket(tokenPerBracket, tokenPerBracket, 0);
+    brackets[2] = DataLib.Bracket(tokenPerBracket, tokenPerBracket, 0);
+    brackets[3] = DataLib.Bracket(tokenPerBracket, tokenPerBracket, 0);
+  }
 
   function purchaseTokens() private {
-    Bracket storage bracket = brackets[currentBracketIndex];
+    DataLib.Bracket storage bracket = brackets[currentBracketIndex];
     require(bracket.tokenPerEther > 0);
     require(bracket.remainToken > 0);
 
@@ -726,20 +616,20 @@ contract CoinBet is StandardToken, Pausable {
     }
   }
 
-  function burnMemberToken(address memberAddress) public onlyOwner {    
-    address lockedWalletAddress = teamWallets[memberAddress];
-    require(lockedWalletAddress != address(0));
+  function burnMemberToken(address _member) external onlyOwner {        
+    require(teamWalletAddress != address(0));
+    ITeamWallet teamWallet = ITeamWallet(teamWalletAddress);    
+    bool canBurn = teamWallet.canBurn(_member);
+    uint256 tokenRemain = teamWallet.getMemberTokenRemain(_member);
+    require(canBurn && tokenRemain > 0);    
+    
+    teamWallet.burnMemberToken(_member);
 
-    LockedWalletForTeam lockedWallet = LockedWalletForTeam(lockedWalletAddress);
-    bool canBurn = lockedWallet.canBurn();
-    require(canBurn);
+    balances[teamWalletAddress] = balances[teamWalletAddress].sub(tokenRemain);
+    totalSupply = totalSupply.sub(tokenRemain);
 
-    uint256 amount = balances[lockedWalletAddress];
-    balances[lockedWalletAddress] = balances[lockedWalletAddress].sub(amount);
-    totalSupply = totalSupply.sub(amount);
-
-    emit Transfer(lockedWalletAddress, address(0), amount);
-    emit BurnMemberToken(lockedWalletAddress, memberAddress, amount);
+    emit Transfer(teamWalletAddress, address(0), tokenRemain);
+    emit BurnMemberToken(teamWalletAddress, _member, tokenRemain);
   }
 	
 }

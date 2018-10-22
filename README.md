@@ -1,1 +1,1 @@
-# coinbet-contracts
+# Z88-token

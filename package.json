@@ -1,5 +1,5 @@
 {
-  "name": "coinbet-contracts",
+  "name": "z88-token",
   "version": "1.0.0",
   "description": "",
   "main": "truffle-config.js",
@@ -8,17 +8,23 @@
   },
   "dependencies": {
     "ethereumjs-wallet": "^0.6.0",
+    "openzeppelin-solidity": "1.12.0",
     "truffle-hdwallet-provider": "0.0.3",
     "truffle-hdwallet-provider-privkey": "^0.2.0",
-    "web3": "^0.19.0",
-    "zeppelin-solidity": "^1.8.0"
+    "web3": "^0.19.0"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "mocha": "^5.2.0"
+  },
   "scripts": {
-    "compile": "truffle compile --all",
-    "dev": "truffle migrate --reset --network development",
+    "localnetwork": "truffle develop",
+    "compile": "truffle compile --all --network develop",
+    "dev": "truffle migrate --reset --network develop",
     "testnet": "truffle migrate --reset --network ropsten",
-    "gensource": "truffle-flattener ./contracts/CoinBet.sol"
+    "gencoinbet": "truffle-flattener ./contracts/CoinBet.sol > ./flat-source/Coinbet_flat.sol",
+    "genteam": "truffle-flattener ./contracts/TeamWallet.sol > ./flat-source/TeamWallet_flat.sol",
+    "genadvisor": "truffle-flattener ./contracts/AdvisorWallet.sol > ./flat-source/AdvisorWallet_flat.sol",
+    "test": "truffle test ./test/TestCoinbet.js --network develop"
   },
   "keywords": [],
   "author": "",

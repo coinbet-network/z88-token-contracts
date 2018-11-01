@@ -23,8 +23,7 @@
     "testnet": "truffle migrate --reset --network ropsten",
     "gencoinbet": "truffle-flattener ./contracts/CoinBet.sol > ./flat-source/Coinbet_flat.sol",
     "genteam": "truffle-flattener ./contracts/TeamWallet.sol > ./flat-source/TeamWallet_flat.sol",
-    "genadvisor": "truffle-flattener ./contracts/AdvisorWallet.sol > ./flat-source/AdvisorWallet_flat.sol",
-    "test": "truffle test ./test/TestCoinbet.js --network develop"
+    "genadvisor": "truffle-flattener ./contracts/AdvisorWallet.sol > ./flat-source/AdvisorWallet_flat.sol"    
   },
   "keywords": [],
   "author": "",

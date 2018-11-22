@@ -1,28 +1,17 @@
 /* solium-disable */
 pragma solidity ^0.4.24;
 
-import './StandardToken.sol';
+import '../node_modules/openzeppelin-solidity/contracts/token/ERC20/ERC20.sol';
+import 'openzeppelin-solidity/contracts/ownership/Ownable.sol';
+import './AdvisorWallet.sol';
+import './TeamWallet.sol';
 
-contract ITeamWallet {
-  function canBurn(address _member) public view returns(bool);  
-  function addMember(address _member, uint256 _tokenAmount) public;
-  function setAllocateTokenDone() public;
-  function getMemberTokenRemain(address _member) public view returns (uint256);
-  function burnMemberToken(address _memberAddress) public;
-}
-
-
-contract IAdvisorWallet {    
-  function addAdvisor(address _member, uint256 _tokenAmount) public;
-  function setAllocateTokenDone() public;
-}
-
-
-library DataLib {
+library ICOData {
   struct Bracket {
     uint256 total;
     uint256 remainToken;
-    uint256 tokenPerEther;    
+    uint256 tokenPerEther;
+    uint256 minAcceptedAmount;
   }
   
   enum SaleStates {
@@ -34,41 +23,79 @@ library DataLib {
   }
 }
 
-
 // ================= Coinbet Token =======================
-contract CoinBet is StandardToken, Ownable {
+contract Coinbet is ERC20, Ownable {
   
   string public constant name = "Coinbet";
-  string public constant symbol = "Z88";  
+  string public constant symbol = "Z88";
   uint256 public constant decimals = 18;
-  uint256 public totalSupply = 200000000 * (10 ** decimals); // 200M token will be supplied
+  // 200M token will be supplied
+  uint256 public constant INITIAL_SUPPLY = 200000000 * (10 ** decimals);
 
-  uint256 public constant founderAndTeamAllocation = 20000000 * (10 ** decimals); // 20M tokens allocated for founders and team
-  uint256 public constant advisorAllocation = 10000000 * (10 ** decimals); // 10M tokens allocated for advisors
-  uint256 public constant airdropAllocation = 50000000 * (10 ** decimals); // 50M tokens (bounty 10M, treasure 30M, partner program 10M) allocated for airdrops
-  
-  uint256 public constant privateSaleAllocation = 40000000 * (10 ** decimals); // 40M tokens allocated for private sale
-  uint256 public constant preSaleAllocation = 20000000 * (10 ** decimals); // 20M tokens allocated for private sale
+  // 20M tokens allocated for founders and team
+  uint256 public constant FOUNDER_AND_TEAM_ALLOCATION = 20000000 * (10 ** decimals);
+  // 10M tokens allocated for advisors
+  uint256 public constant ADVISOR_ALLOCATION = 10000000 * (10 ** decimals);
+  // 5M tokens allocated for bounty & referral
+  uint256 public constant AIRDROP_ALLOCATION = 5000000 * (10 ** decimals);
+  // 30M tokens allocated for treasury
+  uint256 public constant TREASURY_ALLOCATION = 30000000 * (10 ** decimals);
+  // 10M tokens allocated for partner
+  uint256 public constant PARTNER_ALLOCATION = 10000000 * (10 ** decimals);
 
-  uint256 public constant tokenPerBracket1 = 20000000 * (10 ** decimals); // 20M tokens in bracket 1 for public sale
-  uint256 public constant tokenPerBracket2 = 40000000 * (10 ** decimals); // 40M tokens in bracket 2 for public sale
-  uint256 public constant minAcceptedAmountInSale = 0.1 * (1 ether); // 0.1 ether for mininum ether acception in presale and public sale
-  
+  // 40M tokens allocated for pre sale
+  uint256 public constant PRIVATE_SALE_ALLOCATION = 40000000 * (10 ** decimals);
+  // 20M tokens allocated for private sale
+  uint256 public constant PRESALE_ALLOCATION = 20000000 * (10 ** decimals);
+  // 20M tokens allocated for public sale in 1st bracket
+  uint256 public constant PUBLIC_1_ALLOCATION = 20000000 * (10 ** decimals);
+  // 40M tokens allocated for public sale in 2nd bracket
+  uint256 public constant PUBLIC_2_ALLOCATION = 40000000 * (10 ** decimals);
+  // 1.5M tokens allocated for Lotto645 jackpot
+  uint256 public constant LOTTO645_JACKPOT_ALLOCATION = 1500000 * (10 ** decimals);
+  // 3M tokens allocated for Lotto655 jackpot 1
+  uint256 public constant LOTTO655_JACKPOT_1_ALLOCATION = 3000000 * (10 ** decimals);
+  // 0.5M tokens allocated for Lotto655 jackpot 2
+  uint256 public constant LOTTO655_JACKPOT_2_ALLOCATION = 500000 * (10 ** decimals);
+
+  // Admin role
   address public admin;
-  address public walletAddress;
-  address public airdropAddress;  
-  address public teamWalletAddress;
-  address public advisorWalletAddress;
+  // Address where funds are collected
+  address public fundWallet;
+  // Wallet is used for Bounty & Referral program
+  address public airdropWallet;
+  // Wallet for tokens keeping purpose, no sale
+  address public treasuryWallet;
+  // Wallet is used for Coinbet Partner Program
+  address public partnerWallet;
+  // Contract is used for rewarding development team
+  TeamWallet public teamWallet;
+  // Contract is used for rewarding advisor team
+  AdvisorWallet public advisorWallet;
+  // Wallet is used for paying Z88 Lotto 645's starting Jackpot
+  address public lotto645JackpotWallet;
+  // Wallet is used for paying Z88 Lotto 655's starting Jackpot 1
+  address public lotto655Jackpot1Wallet;
+  // Wallet is used for paying Z88 Lotto 655's starting Jackpot 2
+  address public lotto655Jackpot2Wallet;
   
+  // Remain number of Z88 tokens for private sale
   uint256 public privateSaleRemain;
-  DataLib.Bracket public presaleBracket;
-  DataLib.SaleStates public saleState;
+  // Info of presale bracket: total tokens, remain tokens, price
+  ICOData.Bracket public presaleBracket;
+  // Sale states: InPrivateSale, InPresale, EndPresale, InPublicSale, EndPublicSale
+  ICOData.SaleStates public saleState;
+  // The flag to specify the selling state
   bool public isSelling;
+  // The start date for private sale
   uint public sellingTime;
+  // The flag to specify the transferable state
   bool public isTransferable;
 
-  DataLib.Bracket[2] public brackets;  
-  uint public currentBracketIndex;
+  // Info of 1st & 2nd public brackets: total tokens, remain tokens, price
+  ICOData.Bracket[2] public publicBrackets;  
+  // The index of current public bracket: 0 or 1
+  uint private currentPublicBracketIndex;
 
   event PrivateSale(address to, uint256 tokenAmount); // Transfer token to investors in private sale
   event PublicSale(address to, uint256 amount, uint256 tokenAmount); // Investors purchase token in public sale
@@ -95,61 +122,87 @@ contract CoinBet is StandardToken, Ownable {
   }
 
   modifier onlyAdminOrOwner() {
-    require(msg.sender == admin || msg.sender == owner);
+    require(msg.sender == admin || msg.sender == owner());
     _;
   }
 
   constructor(
     address _admin,
-    address _walletAddress,
-    address _airdropAddress,    
+    address _fundWallet,
+    address _airdropWallet,
+    address _treasuryWallet,
+    address _partnerWallet,
+    address _lotto645JackpotWallet,
+    address _lotto655Jackpot1Wallet,
+    address _lotto655Jackpot2Wallet,
+    address _approver1,
+    address _approver2,
     uint _startPrivateSaleAfter
   ) 
     public 
   { 
-    require(_admin != address(0) && _admin != msg.sender);   
-    require(_walletAddress != address(0) && _walletAddress != msg.sender);
-    require(_airdropAddress != address(0) && _airdropAddress != msg.sender );    
+    require(_admin != address(0) && _admin != msg.sender);
+    require(_fundWallet != address(0) && _fundWallet != msg.sender);
+    require(_airdropWallet != address(0) && _airdropWallet != msg.sender );
+    require(_treasuryWallet != address(0) && _treasuryWallet != msg.sender );
+    require(_partnerWallet != address(0) && _partnerWallet != msg.sender );
+    require(_lotto645JackpotWallet != address(0) && _lotto645JackpotWallet != msg.sender );
+    require(_lotto655Jackpot1Wallet != address(0) && _lotto655Jackpot1Wallet != msg.sender );
+    require(_lotto655Jackpot2Wallet != address(0) && _lotto655Jackpot2Wallet != msg.sender );
 
     admin = _admin;
-    walletAddress = _walletAddress;
-    airdropAddress = _airdropAddress;
-    saleState = DataLib.SaleStates.InPrivateSale;
-    sellingTime = now + _startPrivateSaleAfter;
+    fundWallet = _fundWallet;
+    airdropWallet = _airdropWallet;
+    treasuryWallet = _treasuryWallet;
+    partnerWallet = _partnerWallet;
+    lotto645JackpotWallet = _lotto645JackpotWallet;
+    lotto655Jackpot1Wallet = _lotto655Jackpot1Wallet;
+    lotto655Jackpot2Wallet = _lotto655Jackpot2Wallet;
+
+    saleState = ICOData.SaleStates.InPrivateSale;
+    sellingTime = now + _startPrivateSaleAfter * 1 seconds;
+
+    // create TeamWallet & AdvisorWallet
+    teamWallet = new TeamWallet(_approver1, _approver2);
+    advisorWallet = new AdvisorWallet();
 
     emit StartPrivateSale(sellingTime);
 	  initTokenAndBrackets();
   }
 
-  function getSaleState() public view returns (DataLib.SaleStates state, uint time) {
+  function getSaleState() public view returns (ICOData.SaleStates state, uint time) {
     return (saleState, sellingTime);
   }
 
   function () external payable isInSale {
-    require(walletAddress != address(0));
-    require(msg.value >= minAcceptedAmountInSale);
+    require(fundWallet != address(0));    
 
-    if(saleState == DataLib.SaleStates.InPresale && now >= sellingTime ) {
+    if(saleState == ICOData.SaleStates.InPresale && now >= sellingTime ) {
       return purchaseTokenInPresale();
-    } else if(saleState == DataLib.SaleStates.InPublicSale  && now >= sellingTime ) {
+    } else if(saleState == ICOData.SaleStates.InPublicSale  && now >= sellingTime ) {
       return purchaseTokenInPublicSale();
     }
     
     revert();
   }
 
-  function getCurrentBracket() 
+  function getCurrentPublicBracket()
     public 
     view 
     returns (
       uint256 bracketIndex, 
       uint256 total, 
       uint256 remainToken, 
-      uint256 tokenPerEther
+      uint256 tokenPerEther,
+      uint256 minAcceptedAmount
     ) 
-  {    
-    DataLib.Bracket memory bracket = brackets[currentBracketIndex];
-    return (currentBracketIndex, bracket.total, bracket.remainToken, bracket.tokenPerEther);
+  {
+    if(saleState == ICOData.SaleStates.InPublicSale) {
+      ICOData.Bracket memory bracket = publicBrackets[currentPublicBracketIndex];
+      return (currentPublicBracketIndex, bracket.total, bracket.remainToken, bracket.tokenPerEther, bracket.minAcceptedAmount);
+    } else {
+      return (0, 0, 0, 0, 0);
+    }
   }
 
   function transfer(address _to, uint256 _value) 
@@ -185,8 +238,8 @@ contract CoinBet is StandardToken, Ownable {
 
   function changeWalletAddress(address _newAddress) external onlyOwner {
     require(_newAddress != address(0));
-    require(walletAddress != _newAddress);
-    walletAddress = _newAddress;
+    require(fundWallet != _newAddress);
+    fundWallet = _newAddress;
   }
 
   function changeAdminAddress(address _newAdmin) external onlyOwner {
@@ -206,121 +259,139 @@ contract CoinBet is StandardToken, Ownable {
     onlyAdminOrOwner 
     returns (bool success) 
   {
-    require(saleState == DataLib.SaleStates.InPrivateSale);
+    require(saleState == ICOData.SaleStates.InPrivateSale);
     require(_to != address(0));
     require(_value > 0);
     require(privateSaleRemain >= _value);
 
     privateSaleRemain = privateSaleRemain.sub(_value);
-    balances[owner] = balances[owner].sub(_value);
-    balances[_to] = balances[_to].add(_value);
-    emit Transfer(owner, _to, _value);
+    _transfer(owner(), _to, _value);
     emit PrivateSale(_to, _value);
     return true;    
   }
   
-  function setBracketPrice(uint _bracketIndex, uint256 _tokenPerEther) 
+  function setPublicPrice(uint _bracketIndex, uint256 _tokenPerEther) 
     external 
     onlyAdminOrOwner 
     returns (bool success) 
   {
     require(_tokenPerEther > 0);
-    require(brackets.length > _bracketIndex);
-    require(_bracketIndex >= currentBracketIndex);
-    DataLib.Bracket storage bracket = brackets[_bracketIndex];
+    require(publicBrackets.length > _bracketIndex && _bracketIndex >= currentPublicBracketIndex);
+
+    ICOData.Bracket storage bracket = publicBrackets[_bracketIndex];
+    require(bracket.tokenPerEther != _tokenPerEther);
+
     bracket.tokenPerEther = _tokenPerEther;
     emit SetBracketPrice(_bracketIndex, _tokenPerEther);
     return true;
   }
 
+  function setMinAcceptedInPublicSale(uint _bracketIndex, uint256 _minAcceptedAmount) 
+    external 
+    onlyAdminOrOwner 
+    returns (bool success)
+  {
+    require(_minAcceptedAmount > 0);
+    require(publicBrackets.length > _bracketIndex && _bracketIndex >= currentPublicBracketIndex);
+
+    ICOData.Bracket storage bracket = publicBrackets[_bracketIndex];
+    require(bracket.minAcceptedAmount != _minAcceptedAmount);
+
+    bracket.minAcceptedAmount = _minAcceptedAmount;
+    return true;
+  }  
+
   function changeToPublicSale() external onlyAdminOrOwner returns (bool success) {
-    require(saleState == DataLib.SaleStates.EndPresale);    
+    require(saleState == ICOData.SaleStates.EndPresale);    
     return startPublicSale();
   }  
 
   function setPresalePrice(uint256 _tokenPerEther) external onlyAdminOrOwner returns (bool) {
     require(_tokenPerEther > 0);
+    require(presaleBracket.tokenPerEther != _tokenPerEther);
+
     presaleBracket.tokenPerEther = _tokenPerEther;
     emit SetPresalePrice(_tokenPerEther);
     return true;
   }
 
-  function startPresale(uint256 _tokenPerEther, uint _startAfter) external onlyAdminOrOwner returns (bool) {
-    require(saleState < DataLib.SaleStates.InPresale);
+  function startPresale(uint256 _tokenPerEther, uint _startAfter) 
+    external 
+    onlyAdminOrOwner 
+    returns (bool) 
+  {
+    require(saleState < ICOData.SaleStates.InPresale);
     require(_tokenPerEther > 0);    
     presaleBracket.tokenPerEther = _tokenPerEther;
     isSelling = true;
-    saleState = DataLib.SaleStates.InPresale;
-    sellingTime = now + _startAfter;
+    saleState = ICOData.SaleStates.InPresale;
+    sellingTime = now + _startAfter * 1 seconds;
     emit StartPresale(_tokenPerEther, sellingTime);
     return true;
   }
-  
-  function allocateTokenForTeam(address _teamWallet) external onlyOwner {
-    require(teamWalletAddress == address(0) && _teamWallet != address(0));    
-    teamWalletAddress = _teamWallet;
-    ITeamWallet teamWallet = ITeamWallet(teamWalletAddress);    
 
-    // allocation 20M token for team and founder
-    teamWallet.addMember(0x50ce0Eb4c1C1b64f0282f7b118Dfeb72449fbBe6, 10000000 * (10 ** decimals));  
-    teamWallet.addMember(0x13C82E64f460C1e000dF81080064665820756dB6, 10000000 * (10 ** decimals));
-    teamWallet.setAllocateTokenDone();
+  function setMinAcceptedAmountInPresale(uint256 _minAcceptedAmount) 
+    external 
+    onlyAdminOrOwner 
+    returns (bool)
+  {
+    require(_minAcceptedAmount > 0);
+    require(presaleBracket.minAcceptedAmount != _minAcceptedAmount);
 
-    super.transfer(teamWalletAddress, founderAndTeamAllocation);
-  }
-
-  function allocateTokenForAdvisor(address _advisorWallet) external onlyOwner {
-    require(advisorWalletAddress == address(0) && _advisorWallet != address(0));
-    
-    advisorWalletAddress = _advisorWallet;
-    IAdvisorWallet advisorWallet = IAdvisorWallet(advisorWalletAddress);    
-
-    // allocation 10 token for advisor    
-    advisorWallet.addAdvisor(0x50ce0Eb4c1C1b64f0282f7b118Dfeb72449fbBe6, 5000000 * (10 ** decimals));
-    advisorWallet.addAdvisor(0x13C82E64f460C1e000dF81080064665820756dB6, 5000000 * (10 ** decimals));
-    advisorWallet.setAllocateTokenDone();
-
-    super.transfer(advisorWalletAddress, advisorAllocation);
+    presaleBracket.minAcceptedAmount = _minAcceptedAmount;
+    return true;
   }
 
   function burnMemberToken(address _member) external onlyAdminOrOwner {        
-    require(teamWalletAddress != address(0));
-    ITeamWallet teamWallet = ITeamWallet(teamWalletAddress);    
+    require(teamWallet != address(0));
     bool canBurn = teamWallet.canBurn(_member);
     uint256 tokenRemain = teamWallet.getMemberTokenRemain(_member);
     require(canBurn && tokenRemain > 0);    
     
     teamWallet.burnMemberToken(_member);
 
-    balances[teamWalletAddress] = balances[teamWalletAddress].sub(tokenRemain);
-    totalSupply = totalSupply.sub(tokenRemain);
-
-    emit Transfer(teamWalletAddress, address(0), tokenRemain);
-    emit BurnTeamToken(teamWalletAddress, _member, tokenRemain);
+    _burn(teamWallet, tokenRemain);
+    emit BurnTeamToken(teamWallet, _member, tokenRemain);
   }
-  
-  function initTokenAndBrackets() private {
-    balances[owner] = totalSupply;
-	  emit Transfer(address(0), owner, totalSupply);
 
-    // allocate token for airdrop (grow network, bounty, referral, ...)
-    super.transfer(airdropAddress, airdropAllocation);
+  function initTokenAndBrackets() private {
+    _mint(owner(), INITIAL_SUPPLY);
+
+    // allocate token for bounty, referral, treasury, partner
+    super.transfer(airdropWallet, AIRDROP_ALLOCATION);
+    super.transfer(treasuryWallet, TREASURY_ALLOCATION);
+    super.transfer(partnerWallet, PARTNER_ALLOCATION);
 
     // allocate token for private sale
-    privateSaleRemain = privateSaleAllocation;
+    privateSaleRemain = PRIVATE_SALE_ALLOCATION;
 
     // allocate token for presale
-    presaleBracket = DataLib.Bracket(preSaleAllocation, preSaleAllocation, 0);
+    uint256 minAcceptedAmountInPresale = 1 ether; // 1 ether for mininum ether acception in presale
+    presaleBracket = ICOData.Bracket(PRESALE_ALLOCATION, PRESALE_ALLOCATION, 0, minAcceptedAmountInPresale);
     
     // bracket token allocation for public sale
-    brackets[0] = DataLib.Bracket(tokenPerBracket1, tokenPerBracket1, 0);
-    brackets[1] = DataLib.Bracket(tokenPerBracket2, tokenPerBracket2, 0);    
+    uint256 minAcceptedAmountInBracket1 = 0.5 * (1 ether); // 0.5 ether for mininum ether acception in bracket 1
+    publicBrackets[0] = ICOData.Bracket(PUBLIC_1_ALLOCATION, PUBLIC_1_ALLOCATION, 0, minAcceptedAmountInBracket1);
+
+    uint256 minAcceptedAmountInBracket2 = 0.1 * (1 ether); // 0.1 ether for mininum ether acception in bracket 2
+    publicBrackets[1] = ICOData.Bracket(PUBLIC_2_ALLOCATION, PUBLIC_2_ALLOCATION, 0, minAcceptedAmountInBracket2);    
 
     // allocate token for Z88 Lotto Jackpot
+    super.transfer(lotto645JackpotWallet, LOTTO645_JACKPOT_ALLOCATION);
+    super.transfer(lotto655Jackpot1Wallet, LOTTO655_JACKPOT_1_ALLOCATION);
+    super.transfer(lotto655Jackpot2Wallet, LOTTO655_JACKPOT_2_ALLOCATION);
+
+    // allocate token for Team Wallet
+    super.transfer(teamWallet, FOUNDER_AND_TEAM_ALLOCATION);
+    // allocate token to Advisor Wallet
+    super.transfer(advisorWallet, ADVISOR_ALLOCATION);
+    advisorWallet.allocateTokenForAdvisor();
   }
 
   function purchaseTokenInPresale() private {
+    require(msg.value >= presaleBracket.minAcceptedAmount);
     require(presaleBracket.tokenPerEther > 0 && presaleBracket.remainToken > 0);
+
     uint256 tokenPerEther = presaleBracket.tokenPerEther.mul(10 ** decimals);
     uint256 tokenAmount = msg.value.mul(tokenPerEther).div(1 ether);    
 
@@ -331,15 +402,13 @@ contract CoinBet is StandardToken, Ownable {
     }
 
     presaleBracket.remainToken = presaleBracket.remainToken.sub(tokenAmount);
-    balances[owner] = balances[owner].sub(tokenAmount);
-    balances[msg.sender] = balances[msg.sender].add(tokenAmount);    
+    _transfer(owner(), msg.sender, tokenAmount);
 
     uint256 paymentAmount = msg.value.sub(refundAmount);
-    walletAddress.transfer(paymentAmount);
+    fundWallet.transfer(paymentAmount);
     if(refundAmount > 0)      
       msg.sender.transfer(refundAmount);
 
-    emit Transfer(owner, msg.sender, tokenAmount);
     emit PreSale(msg.sender, paymentAmount, tokenAmount);
 
     if(presaleBracket.remainToken == 0) {
@@ -349,23 +418,24 @@ contract CoinBet is StandardToken, Ownable {
 
   function endPresale() private {    
     isSelling = false;
-    saleState = DataLib.SaleStates.EndPresale;
+    saleState = ICOData.SaleStates.EndPresale;
     emit EndPresale();
     startPublicSale();
   }
 
   function startPublicSale() private returns (bool success) {    
-    DataLib.Bracket memory bracket = brackets[currentBracketIndex];
+    ICOData.Bracket memory bracket = publicBrackets[currentPublicBracketIndex];
     if(bracket.tokenPerEther == 0) return false;    
     isSelling = true;
-    saleState = DataLib.SaleStates.InPublicSale;
+    saleState = ICOData.SaleStates.InPublicSale;
     emit StartPublicSale(bracket.tokenPerEther);
     return true;
   }
 
-  function purchaseTokenInPublicSale() private {    
-    DataLib.Bracket storage bracket = brackets[currentBracketIndex];
-    require(bracket.tokenPerEther > 0 && bracket.remainToken > 0);    
+  function purchaseTokenInPublicSale() private {
+    ICOData.Bracket storage bracket = publicBrackets[currentPublicBracketIndex];
+    require(msg.value >= bracket.minAcceptedAmount);
+    require(bracket.tokenPerEther > 0 && bracket.remainToken > 0);
 
     uint256 tokenPerEther = bracket.tokenPerEther.mul(10 ** decimals);
     uint256 remainToken = bracket.remainToken;
@@ -379,15 +449,13 @@ contract CoinBet is StandardToken, Ownable {
     }
 
     bracket.remainToken = bracket.remainToken.sub(tokenAmount);
-    balances[owner] = balances[owner].sub(tokenAmount);
-    balances[msg.sender] = balances[msg.sender].add(tokenAmount);    
+    _transfer(owner(), msg.sender, tokenAmount);
 
     uint256 paymentAmount = msg.value.sub(refundAmount);
-    walletAddress.transfer(paymentAmount);
+    fundWallet.transfer(paymentAmount);
     if(refundAmount > 0)      
       msg.sender.transfer(refundAmount);
     
-    emit Transfer(owner, msg.sender, tokenAmount);
     emit PublicSale(msg.sender, paymentAmount, tokenAmount);
 
     // end current bracket and move to next bracket
@@ -398,17 +466,16 @@ contract CoinBet is StandardToken, Ownable {
 
   function nextBracket() private {
     // last bracket - end public sale
-    if(currentBracketIndex == brackets.length - 1) {
+    if(currentPublicBracketIndex == publicBrackets.length - 1) {
       isSelling = false;
-      saleState = DataLib.SaleStates.EndPublicSale;
+      saleState = ICOData.SaleStates.EndPublicSale;
       isTransferable = true;
       emit EnableTransfer();
       emit EndPublicSale();
     }        
     else {
-      currentBracketIndex = currentBracketIndex + 1;
-      emit ChangeBracketIndex(currentBracketIndex);
+      currentPublicBracketIndex = currentPublicBracketIndex + 1;
+      emit ChangeBracketIndex(currentPublicBracketIndex);
     }
   }
-	
 }
